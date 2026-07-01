@@ -72,7 +72,10 @@
             memset(cellMasks, 0, sizeof(cellMasks));
         }
         int generate2() {
+            int restartCounter = 0;
+
             restart:
+            restartCounter++;
             resetMasks();
             // generate the first row:
             std::shuffle(std::begin(shuffleOptions), std::end(shuffleOptions), rng);
@@ -101,19 +104,29 @@
             int counter = 0;
             while (cell < 81) {
                 counter++;
+                if (counter % 50'000 == 0) {
+                    msg("start message output for loop" + std::to_string(counter));
+                    msg("cell masks");
+                    showCellMasks();
+                    msg("row/col/block masks");
+                    showBitmasks();
+                    msg("data (iteration " + std::to_string(counter) + ")");
+                    show();
+                    msg("stop message output for loop " + std::to_string(counter));
+                }
                 cell_div9 = cell / 9 - 1;
                 cell_mod9 = cell % 9 - 1;
                 uint16_t cellMapping = cell - 10 - (cell-10)/9;
                 uint16_t _cp1 = cell + 1; if (_cp1 % 9 == 0) ++_cp1;
                 uint16_t cellMappingPlus1 = _cp1 - 10 - (_cp1-10)/9;
 
-                msg("top of loop " + std::to_string(cell));
-                msg("masks");
-                showCellMasks();
-                msg("data array");
-                show();
-                msg("bitmask:");
-                showBitmasks();
+                //msg("top of loop " + std::to_string(cell));
+                //msg("masks");
+                //showCellMasks();
+                //msg("data array");
+                //show();
+                //msg("bitmask:");
+                //showBitmasks();
 
                 if (data[cell] != 0) { // visited before
                     cellMasks[cellMappingPlus1] = 0; // next cell data is now useless, we are about to change something upstream
@@ -145,15 +158,11 @@
                     cell = _cp1; //++cell; if (cell % 9 == 0) ++cell;
                 } else {
                     --cell;
-                    if (cell == 10) {
-                        // std::cout << "restarting\n";
-                        msg("reached cell 10, about to crash.");
-                        //goto restart; // hopefully temporary fix, sometimes gets stuck somehow. TODO
-                    }
                     if (cell % 9 == 0) --cell;
+                    if (cell < 10) goto restart; // hacky temp fix for avoiding undefined behavior
                 }
             }
-            return counter;
+            return restartCounter;
         }
         void show() const {
             for (int i = 0; i < 81; i++) {
@@ -334,9 +343,9 @@ std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
         stats Z;
 
         T.start();
-        //for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100; i++) {
             Z.capture(S.generate2());
-        //}
+        }
         T.stop();
         S.show();
         std::cout << T;
