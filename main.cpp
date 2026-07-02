@@ -2,13 +2,13 @@
     #include <random> // random_device for seeding
     #include <chrono> // timekeeping
     #include <fstream>
-    #include <array>
+    #include <array> // for the random holding 4 numbers
     #include <vector>
     #include <bitset> // for debugging bits
 
     #include <climits> // INT_MAX, UINT64_MAX
     #include <cstring> // memcpy
-    class fastRand {
+    class fastRand { // an xoroshiro algorithm
     public:
         fastRand() {
             std::random_device rd;
@@ -21,7 +21,7 @@
         }
         using result_type = uint64_t;
 
-        static constexpr result_type min() {return 0UL;}
+        static constexpr result_type min() {return 0UL;} // shuffle needs these two to work right.
         static constexpr result_type max() {return UINT64_MAX;}
         result_type operator()() {
             const result_type result = rotl(randomSeeds[0] + randomSeeds[3], 23) + randomSeeds[0];
@@ -79,7 +79,7 @@
                 std::shuffle(std::begin(shuffleOptions) + 1, std::end(shuffleOptions), rng);
                 valid = (
                     shuffleOptions[1] != data[1]) && (shuffleOptions[2] != data[2])
-                    && (shuffleOptions[1] != data[2]) && (shuffleOptions[2] != data[1]
+                    && (shuffleOptions[1] != data[2]) && (shuffleOptions[2] != data[1] // make sure the new column doesn't break rules
                 );
             }
             for (uint8_t i = 9, j = 0; i < 81; i += 9) {
@@ -103,7 +103,7 @@
                 iterations++;
                 if (cell == 80) { // the special case - last cell
                     data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
-                    if (data[80] != 0) { // overwrite everything, we don't need it no more. Is this faster? IDK
+                    if (data[80] != 0) { // overwrite everything, we don't need it no more. Is this faster or slower than using a helper variable? IDK
                         data[80] = rng() % std::popcount(data[80]); // read the bottomer one for cleaner implementation
                         for (int k = 0; k < data[80]; k++) {
                             data[80] &= data[80] - 1;
@@ -116,6 +116,13 @@
                 }
                 cell_div9 = cell / 9 - 1;
                 cell_mod9 = cell % 9 - 1;
+
+                // debugging tools
+                // show(); // the 'data' cells information
+                // showBitmasks(); // shows bitmasks for rows, columns, and boxes
+                // showCellMasks(); // shows the data from cellMasks
+                // checkValid(); // checks rows and columns for obvious repeats and terminates
+                // showAllPossibleMasks(); // recalculates and shows updateMask for every cell
 
                 if (data[cell] != 0) { // visited before
                     cellMasks[mapping[cell] + 1] = 0; // next cell data is now useless, we are about to change something upstream
@@ -281,73 +288,73 @@ std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
     return os; // TODO
 }
 
-    struct Timer {
-        std::chrono::time_point<std::chrono::system_clock> _start;
-        std::chrono::time_point<std::chrono::system_clock> _stop;
-        void start() {
-            _start = std::chrono::high_resolution_clock::now();
-        }
-        void stop() {
-            _stop = std::chrono::high_resolution_clock::now();
-        }
-        [[nodiscard]] double getElapsed() const {
-            return std::chrono::duration<double>(_stop - _start).count();
-        }
-    };
-    std::ostream& operator<<(std::ostream& os, const Timer& t) {
-        return os << t.getElapsed() << " seconds" << std::endl;
+struct Timer {
+    std::chrono::time_point<std::chrono::system_clock> _start;
+    std::chrono::time_point<std::chrono::system_clock> _stop;
+    void start() {
+        _start = std::chrono::high_resolution_clock::now();
     }
-
-    class stats {
-    public:
-        int min = INT_MAX;
-        int max = 0;
-        [[nodiscard]] double average() const {
-            double avg = 0;
-            for (const int &val : data) {
-                avg += (double)val;
-            }
-            avg /= (double)data.size();
-            return avg;
-        }
-        [[nodiscard]] double standardDeviation() const {
-            const double avg = average();
-            double stddev = 0;
-            for (const int &val : data) {
-                const double tmp = avg - (double)val;
-                stddev += tmp * tmp;
-            }
-            stddev /= (double)(data.size() - 1);
-            return stddev;
-        }
-        [[maybe_unused]] void capture(const int value) {
-            data.push_back(value);
-            min = std::min(min, value);
-            max = std::max(max, value);
-        }
-    private:
-        std::vector<int> data;
-    };
-    std::ostream& operator<<(std::ostream& os, const stats& S) {
-        return os << std::endl << "Average: " << S.average() <<"\nMin: " << S.min
-        << "\nMax: " << S.max << "\nStandard Deviation: " << S.standardDeviation() << std::endl;
+    void stop() {
+        _stop = std::chrono::high_resolution_clock::now();
     }
-
-    int main() {
-        Timer T;
-        Sudoku S;
-
-        constexpr int iterations = 100;
-        stats Z;
-
-        T.start();
-        for (int i = 0; i < iterations; i++) {
-            Z.capture(S.generate2());
-        }
-        T.stop();
-        S.show();
-        std::cout << T;
-        std::cout << Z;
-        std::cout << T.getElapsed() / iterations << " seconds per iteration";
-        return 0;
+    [[nodiscard]] double getElapsed() const {
+        return std::chrono::duration<double>(_stop - _start).count();
     }
+};
+std::ostream& operator<<(std::ostream& os, const Timer& t) {
+    return os << t.getElapsed() << " seconds" << std::endl;
+}
+
+class stats {
+public:
+    int min = INT_MAX;
+    int max = 0;
+    [[nodiscard]] double average() const {
+        double avg = 0;
+        for (const int &val : data) {
+            avg += (double)val;
+        }
+        avg /= (double)data.size();
+        return avg;
+    }
+    [[nodiscard]] double standardDeviation() const {
+        const double avg = average();
+        double stddev = 0;
+        for (const int &val : data) {
+            const double tmp = avg - (double)val;
+            stddev += tmp * tmp;
+        }
+        stddev /= (double)(data.size() - 1);
+        return stddev;
+    }
+    [[maybe_unused]] void capture(const int value) {
+        data.push_back(value);
+        min = std::min(min, value);
+        max = std::max(max, value);
+    }
+private:
+    std::vector<int> data;
+};
+std::ostream& operator<<(std::ostream& os, const stats& S) {
+    return os << std::endl << "Average: " << S.average() <<"\nMin: " << S.min
+    << "\nMax: " << S.max << "\nStandard Deviation: " << S.standardDeviation() << std::endl;
+}
+
+int main() {
+    Timer T;
+    Sudoku S;
+
+    constexpr int iterations = 100;
+    stats Z;
+
+    T.start();
+    for (int i = 0; i < iterations; i++) {
+        Z.capture(S.generate2());
+    }
+    T.stop();
+    S.show();
+    std::cout << T;
+    std::cout << Z;
+    std::cout << T.getElapsed() / iterations << " seconds per iteration";
+    return 0;
+}
