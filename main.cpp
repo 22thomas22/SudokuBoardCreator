@@ -60,109 +60,95 @@
             }
             for (int i = 10, j = 0; i < 81; i++) {
                 mapping[i] = j;
-                ++j;if (i % 9 == 0) --j;
+                if (i % 9 != 0) ++j;
             }
         }
         void resetMasks() {
-            memset(rowMasks, 0, sizeof(rowMasks));
-            memset(columnMasks, 0, sizeof(columnMasks));
-            memset(boxMasks, 0, sizeof(boxMasks));
-
             memset(data, 0, sizeof(data));
             memset(cellMasks, 0, sizeof(cellMasks));
         }
         int generate2() {
-            int restartCounter = 0;
-
-            restart:
-            restartCounter++;
             resetMasks();
             // generate the first row:
             std::shuffle(std::begin(shuffleOptions), std::end(shuffleOptions), rng);
             memcpy(data, shuffleOptions, 9);
 
+
             // generate the side row:
-            //bool valid = false;
             for (bool valid = false; !valid;) { // repeat until valid
                 std::shuffle(std::begin(shuffleOptions) + 1, std::end(shuffleOptions), rng);
-                valid = (shuffleOptions[1] != data[1]) && (shuffleOptions[2] != data[2]);
+                valid = (
+                    shuffleOptions[1] != data[1]) && (shuffleOptions[2] != data[2])
+                    && (shuffleOptions[1] != data[2]) && (shuffleOptions[2] != data[1]
+                );
             }
             for (uint8_t i = 9, j = 0; i < 81; i += 9) {
                 data[i] = shuffleOptions[++j];
 
-                rowMasks[j-1] |= 1 << data[i];
-                columnMasks[j-1] |= 1 << data[j];
+                rowMasks[j-1] = 1 << data[i];
+                columnMasks[j-1] = 1 << data[j];
             }
 
             boxMasks[0] = 1 << data[0] | columnMasks[0] | columnMasks[1] | rowMasks[0] | rowMasks[1];
             boxMasks[1] = columnMasks[2] | columnMasks[3] | columnMasks[4];
             boxMasks[2] = columnMasks[5] | columnMasks[6] | columnMasks[7];
             boxMasks[3] = rowMasks[2] | rowMasks[3] | rowMasks[4];
+            boxMasks[4] = 0, boxMasks[5] = 0;
             boxMasks[6] = rowMasks[5] | rowMasks[6] | rowMasks[7];
+            boxMasks[7] = 0, boxMasks[8] = 0;
 
             cell = 10;
-            int counter = 0;
-            while (cell < 81) {
-                counter++;
-                if (counter % 50'000 == 0) {
-                    msg("start message output for loop" + std::to_string(counter));
-                    msg("cell masks");
-                    showCellMasks();
-                    msg("row/col/block masks");
-                    showBitmasks();
-                    msg("data (iteration " + std::to_string(counter) + ")");
-                    show();
-                    msg("stop message output for loop " + std::to_string(counter));
+            int iterations = 0;
+            while (true) { // loops for each cell
+                iterations++;
+                if (cell == 80) { // the special case - last cell
+                    data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
+                    if (data[80] != 0) { // overwrite everything, we don't need it no more. Is this faster? IDK
+                        data[80] = rng() % std::popcount(data[80]); // read the bottomer one for cleaner implementation
+                        for (int k = 0; k < data[80]; k++) {
+                            data[80] &= data[80] - 1;
+                        }
+                        data[80] = std::countr_zero(data[80]);
+                        break;
+                    } else { // fine, keep doing your thing
+                        cell = 79;
+                    }
                 }
                 cell_div9 = cell / 9 - 1;
                 cell_mod9 = cell % 9 - 1;
-                uint16_t cellMapping = cell - 10 - (cell-10)/9;
-                uint16_t _cp1 = cell + 1; if (_cp1 % 9 == 0) ++_cp1;
-                uint16_t cellMappingPlus1 = _cp1 - 10 - (_cp1-10)/9;
-
-                //msg("top of loop " + std::to_string(cell));
-                //msg("masks");
-                //showCellMasks();
-                //msg("data array");
-                //show();
-                //msg("bitmask:");
-                //showBitmasks();
 
                 if (data[cell] != 0) { // visited before
-                    cellMasks[cellMappingPlus1] = 0; // next cell data is now useless, we are about to change something upstream
+                    cellMasks[mapping[cell] + 1] = 0; // next cell data is now useless, we are about to change something upstream
                     rowMasks[cell_div9] &= ~(1 << data[cell]); // take out the mask data
                     columnMasks[cell_mod9] &= ~(1 << data[cell]);
                     boxMasks[box[cell]] &= ~(1 << data[cell]);
                 }
                 uint16_t mask = updateMask();
                 if (data[cell] != 0) { // not our first time on this cell
-                    mask &= ~cellMasks[cellMapping]; // make sure we aren't picking a number we tried another time
+                    mask &= ~cellMasks[mapping[cell]]; // make sure we aren't picking a number we tried another time
                 }
-                if (mask != 0) { // nwe have options avaliable to us
-                    uint8_t options = std::popcount(mask);
-                    uint8_t index = rng() % options;
-                    uint16_t maskCopy = mask;
+                if (mask != 0) { // we have options available to us
+                    const uint8_t options = std::popcount(mask); // count how many options we have
+                    const uint8_t index = rng() % options; // pick one of those options (index)
+                    uint16_t maskCopy = mask; // we don't want to destroy our mask, make a copy
                     for (int k = 0; k < index; k++) {
-                        maskCopy &= maskCopy - 1;
+                        maskCopy &= maskCopy - 1; // tear away the 1 digits till we get where we want
                     }
-                    uint8_t number = std::countr_zero(maskCopy);
-                    cellMasks[cellMapping] |= (1 << number); // add to our tried mask
+                    const uint8_t number = std::countr_zero(maskCopy); // the number of trailing zeroes is the number itself
+                    cellMasks[mapping[cell]] |= (1 << number); // add to our tried mask so we don't pick it again (unless we backtrack higher later)
                     data[cell] = number;
 
                     rowMasks[cell_div9] |= (1 << number);
                     columnMasks[cell_mod9] |= (1 << number);
                     boxMasks[box[cell]] |= (1 << number);
 
-                    if (_cp1 < 81) data[_cp1] = 0; // IMPORTANT:
-
-                    cell = _cp1; //++cell; if (cell % 9 == 0) ++cell;
+                    data[(++cell % 9 == 0) ? ++cell : cell] = 0; // increment cell, keep it away from reserved cells, update that cell's data to blank
                 } else {
                     --cell;
-                    if (cell % 9 == 0) --cell;
-                    if (cell < 10) goto restart; // hacky temp fix for avoiding undefined behavior
+                    if (cell_mod9 == 0) --cell;
                 }
             }
-            return restartCounter;
+            return iterations;
         }
         void show() const {
             for (int i = 0; i < 81; i++) {
@@ -179,13 +165,7 @@
         // secondary helper functions
 
         // helper functions
-        static uint8_t getDigit(uint16_t temp, const uint8_t& target) {
-            for (int k = 0; k < target; k++) { // strip away the 1s so we can count how many leading zeros
-                temp &= temp - 1; // turns the next exposed 1 into a 0
-            }
-            return std::countr_zero(temp); // count the number of leading zeros
-        }
-        uint16_t updateMask() const {
+        [[nodiscard]] uint16_t updateMask() const {
             return ~(                           // not: return the bits that are not being used
                 rowMasks[cell_div9]         // overlay the current row
                 | columnMasks[cell_mod9]    // overlay the current column
@@ -278,9 +258,27 @@
                 cols[i % 9][data[i]] = 1;
             }
         }
+        [[maybe_unused]] void showAllPossibleMasks() const {
+            for (int i = 0; i < 81; i++) {
+                uint16_t calculatedMask =  ~(rowMasks[i / 9] |          // couldn't use my builtin updateMask function,
+                    columnMasks[i % 9] | boxMasks[box[i]]) & 0x3FE;  // as it's tied to cell data and not a real function
+                char lb = cell == i ? '[' : ' ';
+                char rb = cell == i ? ']' : ' ';
+                if (i % 9 == 0 || i < 9) {
+                    os << "(reserved)    ";
+                } else {
+                    os << lb << std::bitset<16>(calculatedMask).to_string().erase(0, 7) << '(' << std::popcount(calculatedMask) << ')' << rb;
+                }
+
+                if (i % 9 == 8) {
+                    os << '\n';
+                }
+            }
+            os << std::endl;
+        }
     };
 std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
-    return os;
+    return os; // TODO
 }
 
     struct Timer {
@@ -304,7 +302,7 @@ std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
     public:
         int min = INT_MAX;
         int max = 0;
-        double average() const {
+        [[nodiscard]] double average() const {
             double avg = 0;
             for (const int &val : data) {
                 avg += (double)val;
@@ -312,7 +310,7 @@ std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
             avg /= (double)data.size();
             return avg;
         }
-        double standardDeviation() const {
+        [[nodiscard]] double standardDeviation() const {
             const double avg = average();
             double stddev = 0;
             for (const int &val : data) {
@@ -322,7 +320,7 @@ std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
             stddev /= (double)(data.size() - 1);
             return stddev;
         }
-        void capture(const int value) {
+        [[maybe_unused]] void capture(const int value) {
             data.push_back(value);
             min = std::min(min, value);
             max = std::max(max, value);
@@ -332,23 +330,24 @@ std::ostream& operator<<(std::ostream& os, const Sudoku& S) {
     };
     std::ostream& operator<<(std::ostream& os, const stats& S) {
         return os << std::endl << "Average: " << S.average() <<"\nMin: " << S.min
-        << "\nMax: " << S.max << "\nStandard Deviation: " << S.standardDeviation();
+        << "\nMax: " << S.max << "\nStandard Deviation: " << S.standardDeviation() << std::endl;
     }
 
     int main() {
         Timer T;
         Sudoku S;
 
-        constexpr int iterations = 100'000;
+        constexpr int iterations = 100;
         stats Z;
 
         T.start();
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < iterations; i++) {
             Z.capture(S.generate2());
         }
         T.stop();
         S.show();
         std::cout << T;
         std::cout << Z;
+        std::cout << T.getElapsed() / iterations << " seconds per iteration";
         return 0;
     }

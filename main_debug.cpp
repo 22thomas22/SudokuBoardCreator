@@ -2,6 +2,8 @@
 #include <random>
 #include <chrono>
 #include <fstream>
+#include <algorithm>
+#include <format>
 
 const bool debug = false;
 
@@ -26,34 +28,34 @@ public:
         bool isBacktracking = false;
         int i = 9;
         while (i < 81) {
-            msg("new loop: " + std::to_string(i));
+            //msg("new loop: " + std::to_string(i));
             if (isBacktracking) {
-                msg(std::format("Backtracking loop entered"));
+                //msg(std::format("Backtracking loop entered"));
                 linear[i] = (linear[i] + 1) % 9;
-                msg(std::format("originalValue: {}, linear[i={}]: {}.", originalValues[i], i, linear[i]));
+                //msg(std::format("originalValue: {}, linear[i={}]: {}.", originalValues[i], i, linear[i]));
                 if (linear[i] == originalValues[i]) {
-                    msg("no valid solutions, backtrack one more.");
+                    //msg("no valid solutions, backtrack one more.");
                     i--;
                     continue;
                 }
                 if (check.checkAll(i / 9, i % 9)) {
                     i++;
-                    msg("backtracking scope resolved, moving on to next value.");
+                    //msg("backtracking scope resolved, moving on to next value.");
                     isBacktracking = false;
                 } else {
-                    msg("Number didn't work, trying next number.");
+                    //msg("Number didn't work, trying next number.");
                 }
             } else {
                 linear[i] = dist(rng);
                 originalValues[i] = linear[i];
-                msg(std::format("Created new square with number {}, displaying new grid:", std::to_string(linear[i])));
+                //msg(std::format("Created new square with number {}, displaying new grid:", std::to_string(linear[i])));
                 if (debug) show(logfile);
-                msg("running tests...");
+                //msg("running tests...");
                 if (!check.checkAll(i / 9, i % 9)) {
-                    msg("number rejected. Incrementing number...");
+                    //msg("number rejected. Incrementing number...");
                     isBacktracking = true;
                 } else {
-                    msg("number accepted!");
+                    //msg("number accepted!");
                     i++;
                 }
             }
@@ -97,22 +99,22 @@ private:
         bool columnSafe(const int wholeColumn, const int currentRow) const {
             for (int row = 0; row < currentRow; row++) {
                 if (data[row][wholeColumn] == data[currentRow][wholeColumn]) {
-                    msg(std::format("bad column check: data[row={}][wholeColumn={}]==data[currentRow={}][wholeColumn]", row, wholeColumn, currentRow));
-                    msg(std::format("(LHS={}, RHS={})", data[row][wholeColumn], data[currentRow][wholeColumn]));
+                    //msg(std::format("bad column check: data[row={}][wholeColumn={}]==data[currentRow={}][wholeColumn]", row, wholeColumn, currentRow));
+                    //msg(std::format("(LHS={}, RHS={})", data[row][wholeColumn], data[currentRow][wholeColumn]));
                     return false;
                 }
             }
-            msg("good column check");
+            //msg("good column check");
             return true;
         }
         bool rowSafe(int wholeRow, int currentColumn) const {
             for (int column = 0; column < currentColumn; column++) {
                 if (data[wholeRow][column] == data[wholeRow][currentColumn]) {
-                    msg(std::format("bad row check: data[wholeRow={}][column={}] == data[wholeRow][currentColumn={}]", wholeRow, column, currentColumn));
+                    //msg(std::format("bad row check: data[wholeRow={}][column={}] == data[wholeRow][currentColumn={}]", wholeRow, column, currentColumn));
                     return false;
                 }
             }
-            msg("good row check");
+            //msg("good row check");
             return true;
         }
         bool block(const int row, const int column) const {
@@ -121,12 +123,12 @@ private:
             for (int i = rowBlock; i < row; i++) {
                 for (int j = columnBlock; j < columnBlock + 3; j++) {
                     if (data[i][j] == data[row][column]) {
-                        msg(std::format("bad block: data[i={}][j={}]==data[row={}][column={}]", i, j, row, column));
+                        //msg(std::format("bad block: data[i={}][j={}]==data[row={}][column={}]", i, j, row, column));
                         return false;
                     }
                 }
             } // must be run with a column check to get the squares on the same row
-            msg("good block");
+            //msg("good block");
             return true;
         }
     };
@@ -170,7 +172,7 @@ int main() {
     T.start();
     for (Sudoku& board : boards) {
         board.generate();
-        board.show();
+        //board.show();
     }
     T.end();
     std::cout << T;
