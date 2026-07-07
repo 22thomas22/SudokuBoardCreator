@@ -105,17 +105,16 @@ public:
                     pos = 62;
                 }
             }
-
-            const uint8_t cm9 = cell_mod9[cell];
-            const uint8_t cd9 = cell_div9[cell];
+            cell_div9 = cell / 9 - 1;
+            cell_mod9 = cell % 9 - 1;
 
             if (data[cell] != 0) {
                 cellMasks[mapping[path[pos + 1]]] = 0;
-                rowMasks[cd9] &= ~(1 << data[cell]);
-                columnMasks[cm9] &= ~(1 << data[cell]);
+                rowMasks[cell_div9] &= ~(1 << data[cell]);
+                columnMasks[cell_mod9] &= ~(1 << data[cell]);
                 boxMasks[box[cell]] &= ~(1 << data[cell]);
             }
-            uint16_t mask = ~(rowMasks[cd9] | columnMasks[cm9] | boxMasks[box[cell]]) & 0x3FE;
+            uint16_t mask = ~(rowMasks[cell_div9] | columnMasks[cell_mod9] | boxMasks[box[cell]]) & 0x3FE;
             mask &= ~cellMasks[mapping[cell]];
             if (mask != 0) {
                 const uint8_t options = std::popcount(mask);
@@ -125,8 +124,8 @@ public:
                 cellMasks[mapping[cell]] |= (1 << number); // add to our tried mask so we don't pick it again
                 data[cell] = number;
 
-                rowMasks[cd9] |= (1 << number);
-                columnMasks[cm9] |= (1 << number);
+                rowMasks[cell_div9] |= (1 << number);
+                columnMasks[cell_mod9] |= (1 << number);
                 boxMasks[box[cell]] |= (1 << number);
 
                 data[path[pos + 1]] = 0;
@@ -165,26 +164,14 @@ private:
         return m;
     }();
 
-    inline static constexpr auto cell_mod9 = [] {
-        std::array<uint8_t, 81> mod{};
-        for (int i = 0; i < 81; i++) {
-            mod[i] = i % 9;
-        }
-        return mod;
-    }();
-    inline static constexpr auto cell_div9 = [] {
-        std::array<uint8_t, 81> div{};
-        for (int i = 0; i < 81; i++) {
-            div[i] = i / 9;
-        }
-        return div;
-    }();
-
     fastRand rng; // a class instance that is compatible with shuffle, dist, etc.
 
     uint8_t data[81] = {0}; // the visual data, the end product
 
     uint8_t cell; // the big loop
+
+    uint8_t cell_mod9;
+    uint8_t cell_div9;
 
     static constexpr uint8_t path[64] = {
         10, 11, 19, 20,
