@@ -105,8 +105,9 @@ public:
                     pos = 62;
                 }
             }
-            cell_div9 = cell / 9 - 1;
-            cell_mod9 = cell % 9 - 1;
+
+            const uint8_t cm9 = cell_mod9[cell] - 1;
+            const uint8_t cd9 = cell_div9[cell] - 1;
 
             if (data[cell] != 0) {
                 cellMasks[mapping[path[pos + 1]]] = 0;
@@ -340,7 +341,7 @@ std::ostream& operator<<(std::ostream& os, const stats& S) {
 }
 
 int main() {
-    // 8.9959 microseconds per board
+    // 4.31 microseconds per board
     Timer T;
     Sudoku S;
 

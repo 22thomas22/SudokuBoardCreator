@@ -1,0 +1,8 @@
+#Generated output
+output.txt
+
+#CMake build directories
+cmake-build-*/
+
+#CLion
+.idea/
