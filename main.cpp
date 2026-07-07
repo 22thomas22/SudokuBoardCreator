@@ -357,7 +357,7 @@ int main() {
     Timer T;
     Sudoku S;
 
-    constexpr int iterations = 1'000'000; // takes about 9 seconds to run, but stabilizes the results
+    constexpr int iterations = 1; // takes about 9 seconds to run, but stabilizes the results
     stats Z;
 
     T.start();
