@@ -2,81 +2,52 @@
 #include <random> // random_device for seeding
 #include <chrono> // timekeeping
 #include <fstream> // for long debug logs
-#include <array> // for the random holding 4 numbers
 #include <vector> // to hold the stats
 #include <bitset> // for debugging bits
-
+#include <immintrin.h> // Required for BMI2 intrinsics
+#include <array>
 #include <climits> // INT_MAX, UINT64_MAX
 #include <cstring> // memcpy
-class fastRand { // an xoroshiro algorithm
-public:
+struct fastRand {
+    uint64_t state;
     fastRand() {
         std::random_device rd;
-        randomSeeds = {
-            0x180ec6d33cfd0abaULL ^ (uint64_t(rd()) << 32) | uint64_t(rd()),
-            0xd5a61266f0c9392cULL ^ (uint64_t(rd()) << 32) | uint64_t(rd()),
-            0xa9582618e03fc9aaULL ^ (uint64_t(rd()) << 32) | uint64_t(rd()),
-            0x39abdc4529b1661cULL ^ (uint64_t(rd()) << 32) | uint64_t(rd()),
-        };
+        state = (uint64_t(rd()) << 32) | uint64_t(rd());
     }
     using result_type = uint64_t;
-
-    static constexpr result_type min() {return 0UL;} // shuffle needs these two to work right.
-    static constexpr result_type max() {return UINT64_MAX;}
-    result_type operator()() {
-        const result_type result = rotl(randomSeeds[0] + randomSeeds[3], 23) + randomSeeds[0];
-
-        // Advance state: this is the actual "scramble" step
-        const result_type t = randomSeeds[1] << 17;
-
-        randomSeeds[2] ^= randomSeeds[0];            // mix s[0] into s[2]
-        randomSeeds[3] ^= randomSeeds[1];            // mix s[1] into s[3]
-        randomSeeds[1] ^= randomSeeds[2];            // mix s[2] back into s[1]
-        randomSeeds[0] ^= randomSeeds[3];            // mix s[3] back into s[0]
-
-        randomSeeds[2] ^= t;                         // apply the shift from s[1]
-        randomSeeds[3] = rotl(randomSeeds[3], 45); // rotate s[3] to prevent patterns
-
-        return result;
-    }
-private:
-    std::array<result_type, 4> randomSeeds;
-
-    static result_type rotl(const uint64_t x, const int k) { // similar to bit shift but brings the value back to the other side
-        return (x << k) | (x >> (64 - k));
+    // static constexpr result_type min() { return 0; }
+    // static constexpr result_type max() { return UINT64_MAX; }
+    inline result_type operator()() {
+        state += 0x9E3779B97F4A7C15ULL;
+        uint64_t z = state;
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+        return z ^ (z >> 31);
     }
 };
 
 class Sudoku {
 public:
-    Sudoku() {
-        resetMasks();
-
-        for (int i = 0; i < 81; i++) {
-            box[i] = (i/9 / 3) * 3 + (i%9 / 3);
-            // 0 1 2
-            // 3 4 5
-            // 6 7 8
-        }
-        for (int i = 10, j = 0; i < 81; i++) {
-            mapping[i] = j;
-            if (i % 9 != 0) ++j;
-        }
-    }
+    Sudoku() = default;
     void resetMasks() {
         memset(data, 0, sizeof(data));
         memset(cellMasks, 0, sizeof(cellMasks));
     }
-    int generate2() {
+    void generate2() {
         resetMasks();
         // generate the first row:
-        std::shuffle(std::begin(shuffleOptions), std::end(shuffleOptions), rng);
+        for (uint8_t i = 8; i > 0; --i) { // fisher-yates
+            const uint8_t j = rng() % (i + 1);
+            std::swap(shuffleOptions[i], shuffleOptions[j]);
+        }
         memcpy(data, shuffleOptions, 9);
-
 
         // generate the side row:
         for (bool valid = false; !valid;) { // repeat until valid
-            std::shuffle(std::begin(shuffleOptions) + 1, std::end(shuffleOptions), rng);
+            for (int8_t i = 8; i > 1; --i) { // fisher-yates, don't include the first element
+                uint8_t j = 1 + (rng() % i);
+                std::swap(shuffleOptions[i], shuffleOptions[j]);
+            }
             valid = (
                 shuffleOptions[1] != data[1]) && (shuffleOptions[2] != data[2])
                 && (shuffleOptions[1] != data[2]) && (shuffleOptions[2] != data[1] // make sure the new column doesn't break rules
@@ -98,64 +69,71 @@ public:
         boxMasks[7] = 0, boxMasks[8] = 0;
 
         cell = 10;
-        int iterations = 0;
-        while (true) { // loops for each cell
-            iterations++;
-            if (cell == 80) { // the special case - last cell
+        uint8_t pos = 0;
+        /**
+         *  Algorithm Pseudocode
+         *  start loop
+         *    if last cell:
+         *      check mask. If options avaliable, pick one and exit.
+         *      otherwise backtrack and continue
+         *    Cache the values of modulo and divide 9
+         *    if cell has data after it (next cell has been explored):
+         *      reset the next cell (that we just came from) and erase the current value from the current cell
+         *    generate a mask of avaliable spots and remove any spots we have already tried
+         *    if the mask is not blank (if there are still spots we can visit):
+         *      count how many options, generate a random number 0-options
+         *      find the offset of that option, this number is our new value
+         *      store this value in our 3 bitmasks and maks sure we record this value in our cell's bitmask (to not try it again)
+         *      jump to the next cell in line
+         *      update the cell
+         *    otherwise if the mask is indeed blank:
+         *      go back to the previous cell, cleanup will be handled on the next iteration by that cell.
+         *  **/
+
+        while (true) {
+            if (cell == 80)/*[[unlikely]]*/ {
                 data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
-                if (data[80] != 0) { // overwrite everything, we don't need it no more. Is this faster or slower than using a helper variable? IDK
-                    data[80] = rng() % std::popcount(data[80]); // read the bottomer one for cleaner implementation
+                if (data[80] != 0) {
+                    data[80] = rng() % std::popcount(data[80]);
                     for (int k = 0; k < data[80]; k++) {
                         data[80] &= data[80] - 1;
                     }
                     data[80] = std::countr_zero(data[80]);
                     break;
-                } else { // fine, keep doing your thing
+                } else {
                     cell = 79;
+                    pos = 62;
                 }
             }
             cell_div9 = cell / 9 - 1;
             cell_mod9 = cell % 9 - 1;
 
-            // debugging tools
-            // show(); // the 'data' cells information
-            // showBitmasks(); // shows bitmasks for rows, columns, and boxes
-            // showCellMasks(); // shows the data from cellMasks
-            // checkValid(); // checks rows and columns for obvious repeats and terminates
-            // showAllPossibleMasks(); // recalculates and shows updateMask for every cell
-
-            if (data[cell] != 0) { // visited before
-                cellMasks[mapping[cell] + 1] = 0; // next cell data is now useless, we are about to change something upstream
-                rowMasks[cell_div9] &= ~(1 << data[cell]); // take out the mask data
+            if (data[cell] != 0) {
+                cellMasks[mapping[path[pos + 1]]] = 0;
+                rowMasks[cell_div9] &= ~(1 << data[cell]);
                 columnMasks[cell_mod9] &= ~(1 << data[cell]);
                 boxMasks[box[cell]] &= ~(1 << data[cell]);
             }
-            uint16_t mask = updateMask();
-            if (data[cell] != 0) { // not our first time on this cell
-                mask &= ~cellMasks[mapping[cell]]; // make sure we aren't picking a number we tried another time
-            }
-            if (mask != 0) { // we have options available to us
-                const uint8_t options = std::popcount(mask); // count how many options we have
-                const uint8_t index = rng() % options; // pick one of those options (index)
-                uint16_t maskCopy = mask; // we don't want to destroy our mask, make a copy
-                for (int k = 0; k < index; k++) {
-                    maskCopy &= maskCopy - 1; // tear away the 1 digits till we get where we want
-                }
-                const uint8_t number = std::countr_zero(maskCopy); // the number of trailing zeroes is the number itself
-                cellMasks[mapping[cell]] |= (1 << number); // add to our tried mask so we don't pick it again (unless we backtrack higher later)
+            uint16_t mask = ~(rowMasks[cell_div9] | columnMasks[cell_mod9] | boxMasks[box[cell]]) & 0x3FE;
+            mask &= ~cellMasks[mapping[cell]];
+            if (mask != 0) {
+                const uint8_t options = std::popcount(mask);
+                const uint8_t index = rng() % options;
+
+                const uint8_t number = std::countr_zero(_pdep_u64(1u << index, mask)); // grab the Nth 1 and read the offset
+                cellMasks[mapping[cell]] |= (1 << number); // add to our tried mask so we don't pick it again
                 data[cell] = number;
 
                 rowMasks[cell_div9] |= (1 << number);
                 columnMasks[cell_mod9] |= (1 << number);
                 boxMasks[box[cell]] |= (1 << number);
 
-                data[(++cell % 9 == 0) ? ++cell : cell] = 0; // increment cell, keep it away from reserved cells, update that cell's data to blank
+                data[path[pos + 1]] = 0;
+                cell = path[++pos];
             } else {
-                --cell;
-                if (cell_mod9 == 0) --cell;
+                cell = path[--pos];
             }
         }
-        return iterations;
     }
     void show() const {
         for (int i = 0; i < 81; i++) {
@@ -169,19 +147,22 @@ public:
         os << std::endl << std::endl;
     }
 private:
-    // secondary helper functions
-
-    // helper functions
-    [[nodiscard]] uint16_t updateMask() const {
-        return ~(                           // not: return the bits that are not being used
-            rowMasks[cell_div9]         // overlay the current row
-            | columnMasks[cell_mod9]    // overlay the current column
-            | boxMasks[box[cell]]           // overlay the box where our box table tells us to go
-            ) & 0x3FE;                      // hide the extra bits on the end, since we are using 9/16 bits
-    }
     // variables
-    uint8_t box[81]; // maps each square to a 3x3 box for speed. Look-up table is set in constuctor
-    uint8_t mapping[81]; // maps each 9x9 location to an 8x8 location. Fails on the last digit.
+    inline static constexpr auto box = [] {
+        std::array<uint8_t, 81> b{};
+        for (int i = 0; i < 81; ++i)
+            b[i] = (i / 9 / 3) * 3 + (i % 9 / 3);
+        return b;
+    }();
+
+    inline static constexpr auto mapping = [] {
+        std::array<uint8_t, 81> m{};
+        for (int i = 10, j = 0; i < 81; i++) {
+            m[i] = j;
+            if (i % 9 != 0) ++j;
+        }
+        return m;
+    }();
 
     fastRand rng; // a class instance that is compatible with shuffle, dist, etc.
 
@@ -192,6 +173,24 @@ private:
     uint8_t cell_mod9;
     uint8_t cell_div9;
 
+    static constexpr uint8_t path[64] = {
+        10, 11, 19, 20,
+        12, 13, 14, 15, 16, 17,
+        21, 22, 23, 24, 25, 26,
+        28, 37, 46, 55, 64, 73,
+        29, 38, 47, 56, 65, 74,
+        30, 31, 32, 33, 34, 35,
+        39, 48, 57, 66, 75,
+        40, 41, 49, 50,
+        42, 43, 44,
+        51, 52, 53,
+        58, 67, 76,
+        59, 68, 77,
+        60, 61, 62,
+        69, 78,
+        70, 71,
+        79, 80
+    };
 
     uint8_t shuffleOptions[9] = {1,2,3,4,5,6,7,8,9};
 
@@ -341,20 +340,21 @@ std::ostream& operator<<(std::ostream& os, const stats& S) {
 }
 
 int main() {
+    // 8.9959 microseconds per board
     Timer T;
     Sudoku S;
 
-    constexpr int iterations = 100;
+    constexpr int iterations = 1'000'000; // takes about 9 seconds to run, but stabilizes the results
     stats Z;
 
     T.start();
     for (int i = 0; i < iterations; i++) {
-        Z.capture(S.generate2());
+        S.generate2();
     }
     T.stop();
     S.show();
     std::cout << T;
-    std::cout << Z;
+    // std::cout << Z;
     std::cout << T.getElapsed() / iterations << " seconds per iteration";
     return 0;
 }
