@@ -353,7 +353,7 @@ std::ostream& operator<<(std::ostream& os, const stats& S) {
 }
 
 int main() {
-    // 4.31 microseconds per board
+    // about 9 microseconds per board
     Timer T;
     Sudoku S;
 
