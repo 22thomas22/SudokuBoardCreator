@@ -106,8 +106,8 @@ public:
                 }
             }
 
-            const uint8_t cm9 = cell_mod9[cell];
-            const uint8_t cd9 = cell_div9[cell];
+            const uint8_t cm9 = cell_mod9[cell] - 1;
+            const uint8_t cd9 = cell_div9[cell] - 1;
 
             if (data[cell] != 0) {
                 cellMasks[mapping[path[pos + 1]]] = 0;
@@ -353,11 +353,11 @@ std::ostream& operator<<(std::ostream& os, const stats& S) {
 }
 
 int main() {
-    // 8.9959 microseconds per board
+    // 4.31 microseconds per board
     Timer T;
     Sudoku S;
 
-    constexpr int iterations = 1; // takes about 9 seconds to run, but stabilizes the results
+    constexpr int iterations = 1'000'000; // takes about 9 seconds to run, but stabilizes the results
     stats Z;
 
     T.start();
