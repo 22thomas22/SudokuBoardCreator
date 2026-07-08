@@ -12,7 +12,7 @@ struct fastRand {
     uint64_t state;
     fastRand() {
         std::random_device rd;
-        state = (uint64_t(rd()) << 32) | uint64_t(rd());
+        state = (uint64_t{rd()} << 32) | uint64_t{rd()};
     }
     using result_type = uint64_t;
     // static constexpr result_type min() { return 0; }
@@ -139,9 +139,9 @@ public:
     void show() const {
         for (int i = 0; i < 81; i++) {
             if (i == cell) {
-                os << '[' << (int)data[i] << ']';
+                os << '[' << int{data[i]} << ']';
             } else {
-                os << ' ' << (int)data[i] << ' ';
+                os << ' ' << int{data[i]} << ' ';
             }
             if (i % 9 == 8) os << '\n';
         }
@@ -254,8 +254,7 @@ private:
     }
     [[maybe_unused]] void showCellMasks() const {
         for (int i = 0; i < 64; i++) {
-            int b8tob9 = (i+10) + i/9;
-            if (cell == b8tob9) {
+            if (const int b8tob9 = (i+10) + i/9; cell == b8tob9) {
                 os << '[' << (std::bitset<16>(cellMasks[i]).to_string()).erase(0, 7) << ']';
             } else {
                 os << ' ' << (std::bitset<16>(cellMasks[i]).to_string()).erase(0, 7) << ' ';
@@ -324,19 +323,19 @@ public:
     [[nodiscard]] double average() const {
         double avg = 0;
         for (const int &val : data) {
-            avg += (double)val;
+            avg += double(val);
         }
-        avg /= (double)data.size();
+        avg /= double(data.size());
         return avg;
     }
     [[nodiscard]] double standardDeviation() const {
         const double avg = average();
         double stddev = 0;
         for (const int &val : data) {
-            const double tmp = avg - (double)val;
+            const double tmp = avg - double(val);
             stddev += tmp * tmp;
         }
-        stddev /= (double)(data.size() - 1);
+        stddev /= double((data.size() - 1));
         return stddev;
     }
     [[maybe_unused]] void capture(const int value) {
