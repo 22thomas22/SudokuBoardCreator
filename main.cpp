@@ -6,6 +6,7 @@
 #include <bitset> // for debugging bits
 #include <immintrin.h> // Required for BMI2 intrinsics
 #include <array>
+#include <cfloat>
 #include <climits> // INT_MAX, UINT64_MAX
 #include <cstring> // memcpy
 struct fastRand {
@@ -316,57 +317,52 @@ std::ostream& operator<<(std::ostream& os, const Timer& t) {
     return os << t.getElapsed() << " seconds" << std::endl;
 }
 
-class stats {
-public:
-    int min = INT_MAX;
-    int max = 0;
-    [[nodiscard]] double average() const {
-        double avg = 0;
-        for (const int &val : data) {
-            avg += double(val);
-        }
-        avg /= double(data.size());
-        return avg;
+struct stats {
+    stats(int cuts) : cuts(cuts) {}
+    std::vector<double> data;
+    long long count = 0;
+    int cuts;
+    void addElement(const double time) {
+        data.push_back(time);
     }
-    [[nodiscard]] double standardDeviation() const {
-        const double avg = average();
-        double stddev = 0;
-        for (const int &val : data) {
-            const double tmp = avg - double(val);
-            stddev += tmp * tmp;
-        }
-        stddev /= double((data.size() - 1));
-        return stddev;
-    }
-    [[maybe_unused]] void capture(const int value) {
-        data.push_back(value);
-        min = std::min(min, value);
-        max = std::max(max, value);
-    }
-private:
-    std::vector<int> data;
 };
 std::ostream& operator<<(std::ostream& os, const stats& S) {
-    return os << std::endl << "Average: " << S.average() <<"\nMin: " << S.min
-    << "\nMax: " << S.max << "\nStandard Deviation: " << S.standardDeviation() << std::endl;
+    double min = DBL_MAX;
+    double max = -DBL_MAX;
+    for (double i : S.data) {
+        min = std::min(min, i);
+        max = std::max(max, i);
+    }
+    double delta = (max - min) / S.cuts;
+    std::vector<long long> bars(S.cuts, 0);
+    for (const double v : S.data) {
+        int idx = int((v - min) / delta);
+        if (idx >= S.cuts) idx = S.cuts - 1;
+        ++bars[idx];
+    }
+    for (int i = 0; i < S.cuts; i++) {
+        const double binStart = min + i * delta;
+        const double binEnd = min + (i+1) * delta;
+        os << binStart << "," << binEnd << "," << bars[i] << "\n";
+    }
+    return os;
 }
 
 int main() {
     // about 9 microseconds per board
-    Timer T;
     Sudoku S;
 
-    constexpr int iterations = 1'000'000; // takes about 9 seconds to run, but stabilizes the results
-    stats Z;
+    constexpr int iterations = 10'000'000; // takes about 90 seconds to run, but better histogram
+    stats Z(1000); // create a histogram with 1000 cuts in it.
 
-    T.start();
     for (int i = 0; i < iterations; i++) {
+        Timer T;
+        T.start();
         S.generate2();
+        T.stop();
+        Z.addElement(T.getElapsed());
     }
-    T.stop();
-    S.show();
-    std::cout << T;
-    // std::cout << Z;
-    std::cout << T.getElapsed() / iterations << " seconds per iteration";
+    std::ofstream hist("histogram.csv");
+    hist << Z;
     return 0;
 }
