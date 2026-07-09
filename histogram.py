@@ -2,13 +2,8 @@ import csv
 import os
 import matplotlib.pyplot as plt
 
-def find_histogram_files(start_dir="."):
-    found = []
-    for root, dirs, files in os.walk(start_dir):
-        for filename in files:
-            if filename == "histogram.csv":
-                found.append(os.path.join(root, filename))
-    return found
+RESULTS_DIR = "./benchmark_results"
+OUTPUT_DIR = os.path.join(RESULTS_DIR, "plots")
 
 def load_histogram(path):
     bin_starts, bin_ends, counts = [], [], []
@@ -18,31 +13,28 @@ def load_histogram(path):
             bin_ends.append(float(row[1]))
             counts.append(int(row[2]))
     return bin_starts, bin_ends, counts
-
-def plot_one(path, bin_starts, bin_ends, counts):
-    widths = [end - start for start, end in zip(bin_starts, bin_ends)]
+def plot_one(csv_path, out_dir):
+    bin_starts, bin_ends, counts = load_histogram(csv_path)
+    widths = [e - s for s,e in zip(bin_starts, bin_ends)]
 
     plt.figure()
     plt.bar(bin_starts, counts, width=widths, align="edge")
     plt.yscale("log")
-    plt.xlabel("value")
-    plt.ylabel("count (log scale)")
-    plt.title(path)
+    name = os.path.splitext(os.path.basename(csv_path))[0]
+    plt.title(name)
 
-    out_path = path.replace("histogram.csv", "histogram.png")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, name + ".png")
     plt.savefig(out_path, dpi=150)
     print(f"saved {out_path}")
 
 def main():
-    files = find_histogram_files(".")
-    if not files:
-        print("no histogram.csv files found")
+    csv_files = [f for f in os.listdir(RESULTS_DIR) if f.endswith(".csv")]
+    if not csv_files:
+        print(f"no CSV files found in {RESULTS_DIR}.")
         return
-    print(f"found {len(files)} histogram file(s).")
-    for f in files:
-        print(f" {f}")
-    for path in files:
-        bin_starts, bin_ends, counts = load_histogram(path)
-        plot_one(path, bin_starts, bin_ends, counts)
+    for filename in csv_files:
+        plot_one(os.path.join(RESULTS_DIR, filename), OUTPUT_DIR)
+
 if __name__ == "__main__":
     main()

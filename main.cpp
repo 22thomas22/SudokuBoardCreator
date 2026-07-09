@@ -9,6 +9,8 @@
 #include <cfloat>
 #include <climits> // INT_MAX, UINT64_MAX
 #include <cstring> // memcpy
+#include <filesystem>
+
 struct fastRand {
     uint64_t state;
     fastRand() {
@@ -35,6 +37,7 @@ public:
         memset(cellMasks, 0, sizeof(cellMasks));
     }
     void generate2() {
+        restart:
         resetMasks();
         // generate the first row:
         for (uint8_t i = 8; i > 0; --i) { // fisher-yates
@@ -90,8 +93,12 @@ public:
          *    otherwise if the mask is indeed blank:
          *      go back to the previous cell, cleanup will be handled on the next iteration by that cell.
          *  **/
-
+        int iterations = 0;
         while (true) {
+            ++iterations;
+            if (iterations > 50'000)[[unlikely]] {
+                goto restart;
+            }
             if (cell == 80)/*[[unlikely]]*/ {
                 data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
                 if (data[80] != 0) {
@@ -362,7 +369,8 @@ int main() {
         T.stop();
         Z.addElement(T.getElapsed());
     }
-    std::ofstream hist("histogram.csv");
-    hist << Z;
+    std::filesystem::create_directories("../benchmark_results");
+    std::ofstream timeHist("../benchmark_results/time_histogram_cutoff.csv");
+    timeHist << Z;
     return 0;
 }
