@@ -55,4 +55,10 @@
 | How much cleaning gets done while you wait | none             | none             | none            | An entire planet's worth                   |
 The clear winner is randomGuesser.cpp.
 ## Results
-![](benchmark_results)
+### Experiments
+#### Q. Will having an early termination result in higher average time?
+|![](benchmark_results/plots/time_histogram_cutoff.png)|![](benchmark_results/plots/time_histogram_no_cutoff.png)|
+|---|---|
+#### A. no.
+Here is the graph in higher quality. (across 100 million runs)
+![](benchmark_results/plots/time_histogram_nocutoff_high_quality.png)

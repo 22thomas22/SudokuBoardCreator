@@ -2,8 +2,8 @@ import csv
 import os
 import matplotlib.pyplot as plt
 
-RESULTS_DIR = "./benchmark_results"
-OUTPUT_DIR = os.path.join(RESULTS_DIR, "plots")
+RESULTS_DIR = "./benchmark_results/csv"
+OUTPUT_DIR = "./benchmark_results/plots"
 
 def load_histogram(path):
     bin_starts, bin_ends, counts = [], [], []
@@ -69,7 +69,7 @@ def plot_one(csv_path, out_dir):
 
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, name + ".png")
-    plt.savefig(out_path, dpi=300)
+    plt.savefig(out_path, dpi=600)
     print(f"saved {out_path}")
 
 def main():

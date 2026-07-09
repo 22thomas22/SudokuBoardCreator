@@ -359,8 +359,12 @@ int main() {
     stats Z(10'000); // create a histogram with 10000 cuts in it.
 
     Timer T;
-    for (long int i = 0; i < iterations; i++) {
-        if (iterations)
+    int iterLooping = 0;
+    for (long int i = 0; i < iterations; i++, iterLooping++) {
+        if (iterLooping > 100'000) {
+            iterLooping = 0;
+            std::cout << i << '\n';
+        }
         T.start();
         S.generate2();
         T.stop();
