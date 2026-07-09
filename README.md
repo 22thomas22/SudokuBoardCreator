@@ -54,3 +54,5 @@
 | Customer Satisfaction                      | Great            | Fantastic        | Worthless       | Priceless/Unbeatable (ages like fine wine) |
 | How much cleaning gets done while you wait | none             | none             | none            | An entire planet's worth                   |
 The clear winner is randomGuesser.cpp.
+## Results
+![](benchmark_results)

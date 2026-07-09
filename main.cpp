@@ -37,7 +37,7 @@ public:
         memset(cellMasks, 0, sizeof(cellMasks));
     }
     void generate2() {
-        restart:
+        // restart:
         resetMasks();
         // generate the first row:
         for (uint8_t i = 8; i > 0; --i) { // fisher-yates
@@ -93,12 +93,7 @@ public:
          *    otherwise if the mask is indeed blank:
          *      go back to the previous cell, cleanup will be handled on the next iteration by that cell.
          *  **/
-        int iterations = 0;
         while (true) {
-            ++iterations;
-            if (iterations > 50'000)[[unlikely]] {
-                goto restart;
-            }
             if (cell == 80)/*[[unlikely]]*/ {
                 data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
                 if (data[80] != 0) {
@@ -325,7 +320,7 @@ std::ostream& operator<<(std::ostream& os, const Timer& t) {
 }
 
 struct stats {
-    stats(int cuts) : cuts(cuts) {}
+    stats(const int cuts) : cuts(cuts) {}
     std::vector<double> data;
     long long count = 0;
     int cuts;
@@ -335,13 +330,14 @@ struct stats {
 };
 std::ostream& operator<<(std::ostream& os, const stats& S) {
     double min = DBL_MAX;
-    double max = -DBL_MAX;
+    //double max = -DBL_MAX;
     for (double i : S.data) {
         min = std::min(min, i);
-        max = std::max(max, i);
+        //max = std::max(max, i);
     }
+    double max = 0.002;
     double delta = (max - min) / S.cuts;
-    std::vector<long long> bars(S.cuts, 0);
+    std::vector<long long int> bars(S.cuts, 0);
     for (const double v : S.data) {
         int idx = int((v - min) / delta);
         if (idx >= S.cuts) idx = S.cuts - 1;
@@ -359,18 +355,19 @@ int main() {
     // about 9 microseconds per board
     Sudoku S;
 
-    constexpr int iterations = 10'000'000; // takes about 90 seconds to run, but better histogram
-    stats Z(1000); // create a histogram with 1000 cuts in it.
+    constexpr long int iterations = 10'000'000; // to estimate the time, take iterations * 9e-6 seconds
+    stats Z(10'000); // create a histogram with 10000 cuts in it.
 
-    for (int i = 0; i < iterations; i++) {
-        Timer T;
+    Timer T;
+    for (long int i = 0; i < iterations; i++) {
+        if (iterations)
         T.start();
         S.generate2();
         T.stop();
         Z.addElement(T.getElapsed());
     }
     std::filesystem::create_directories("../benchmark_results");
-    std::ofstream timeHist("../benchmark_results/time_histogram_cutoff.csv");
+    std::ofstream timeHist("../benchmark_results/csv/time_histogram_nocutoff_high_quality.csv");
     timeHist << Z;
     return 0;
 }

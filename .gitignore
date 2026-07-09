@@ -1,5 +1,6 @@
 #Generated output
 output.txt
+benchmark_results/csv/
 
 #CMake build directories
 cmake-build-*/
