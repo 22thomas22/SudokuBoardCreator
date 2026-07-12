@@ -41,7 +41,7 @@ public:
         resetMasks();
         // generate the first row:
         for (uint8_t i = 8; i > 0; --i) { // fisher-yates
-            const uint8_t j = rng() % (i + 1);
+            const uint8_t j = fastClamp(rng(), (i + 1));
             std::swap(shuffleOptions[i], shuffleOptions[j]);
         }
         memcpy(data, shuffleOptions, 9);
@@ -49,7 +49,7 @@ public:
         // generate the side row:
         for (bool valid = false; !valid;) { // repeat until valid
             for (int8_t i = 8; i > 1; --i) { // fisher-yates, don't include the first element
-                uint8_t j = 1 + (rng() % i);
+                const uint8_t j = 1 + fastClamp(rng(), i);
                 std::swap(shuffleOptions[i], shuffleOptions[j]);
             }
             valid = (
@@ -97,7 +97,7 @@ public:
             if (cell == 80)/*[[unlikely]]*/ {
                 data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
                 if (data[80] != 0) {
-                    data[80] = rng() % std::popcount(data[80]);
+                    data[80] = fastClamp(rng(), std::popcount(data[80]));
                     for (int k = 0; k < data[80]; k++) {
                         data[80] &= data[80] - 1;
                     }
@@ -122,7 +122,7 @@ public:
             mask &= ~cellMasks[mapping[cell]];
             if (mask != 0) {
                 const uint8_t options = std::popcount(mask);
-                const uint8_t index = rng() % options;
+                const uint8_t index = fastClamp(rng(), options);
 
                 const uint8_t number = std::countr_zero(_pdep_u64(1u << index, mask)); // grab the Nth 1 and read the offset
                 cellMasks[mapping[cell]] |= (1 << number); // add to our tried mask so we don't pick it again
@@ -151,6 +151,10 @@ public:
         os << std::endl << std::endl;
     }
 private:
+    // helper functions
+    static inline uint32_t fastClamp(const uint32_t x, const uint32_t N) { // Daniel Lemire's fast range reduction
+        return ((uint64_t) x * (uint64_t) N) >> 32;
+    }
     // variables
     inline static constexpr auto box = [] {
         std::array<uint8_t, 81> b{};
@@ -355,23 +359,15 @@ int main() {
     // about 9 microseconds per board
     Sudoku S;
 
-    constexpr long int iterations = 10'000'000; // to estimate the time, take iterations * 9e-6 seconds
+    constexpr long int iterations = 100; // to estimate the time, take iterations * 9e-6 seconds
     stats Z(10'000); // create a histogram with 10000 cuts in it.
 
     Timer T;
-    int iterLooping = 0;
-    for (long int i = 0; i < iterations; i++, iterLooping++) {
-        if (iterLooping > 100'000) {
-            iterLooping = 0;
-            std::cout << i << '\n';
-        }
-        T.start();
+    T.start();
+    for (long int i = 0; i < iterations; i++) {
         S.generate2();
-        T.stop();
-        Z.addElement(T.getElapsed());
     }
-    std::filesystem::create_directories("../benchmark_results");
-    std::ofstream timeHist("../benchmark_results/csv/time_histogram_nocutoff_high_quality.csv");
-    timeHist << Z;
+    T.stop();
+    std::cout << T;
     return 0;
 }
