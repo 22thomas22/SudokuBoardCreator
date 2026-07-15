@@ -97,15 +97,10 @@ public:
             if (cell == 80)/*[[unlikely]]*/ {
                 data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
                 if (data[80] != 0) {
-                    data[80] = fastClamp(rng(), std::popcount(data[80]));
-                    for (int k = 0; k < data[80]; k++) {
-                        data[80] &= data[80] - 1;
-                    }
-                    data[80] = std::countr_zero(data[80]);
+                    data[80] = std::countr_zero(_pdep_u64(1u << fastClamp(rng(), std::popcount(data[80])), data[80]));
                     break;
                 } else {
-                    cell = 79;
-                    pos = 62;
+                    cell = 79, pos = 62;
                 }
             }
 
@@ -113,7 +108,7 @@ public:
             const uint8_t cd9 = cell_div9[cell] - 1;
 
             if (data[cell] != 0) {
-                cellMasks[mapping[path[pos + 1]]] = 0;
+                cellMasks[mappedPath[pos + 1]] = 0;
                 rowMasks[cd9] &= ~(1 << data[cell]);
                 columnMasks[cm9] &= ~(1 << data[cell]);
                 boxMasks[box[cell]] &= ~(1 << data[cell]);
@@ -156,6 +151,24 @@ private:
         return ((uint64_t) x * (uint64_t) N) >> 32;
     }
     // variables
+    static constexpr uint8_t path[64] = {
+        10, 11, 19, 20, // finish the first box
+        12, 13, 14, 15, 16, 17, // first row
+        21, 22, 23, 24, 25, 26, // second row
+        28, 37, 46, 55, 64, 73,
+        29, 38, 47, 56, 65, 74,
+        30, 31, 32, 33, 34, 35,
+        39, 48, 57, 66, 75,
+        40, 41, 49, 50,
+        42, 43, 44,
+        51, 52, 53,
+        58, 67, 76,
+        59, 68, 77,
+        60, 61, 62,
+        69, 78,
+        70, 71,
+        79, 80
+    };
     inline static constexpr auto box = [] {
         std::array<uint8_t, 81> b{};
         for (int i = 0; i < 81; ++i)
@@ -186,6 +199,12 @@ private:
         }
         return div;
     }();
+    inline static constexpr auto mappedPath = [] {
+        std::array<uint8_t, 64> a{};
+        for (int i = 0; i < 64; i++)
+            a[i] = mapping[path[i]];
+        return a;
+    }();
 
     fastRand rng; // a class instance that is compatible with shuffle, dist, etc.
 
@@ -193,24 +212,7 @@ private:
 
     uint8_t cell; // the big loop
 
-    static constexpr uint8_t path[64] = {
-        10, 11, 19, 20,
-        12, 13, 14, 15, 16, 17,
-        21, 22, 23, 24, 25, 26,
-        28, 37, 46, 55, 64, 73,
-        29, 38, 47, 56, 65, 74,
-        30, 31, 32, 33, 34, 35,
-        39, 48, 57, 66, 75,
-        40, 41, 49, 50,
-        42, 43, 44,
-        51, 52, 53,
-        58, 67, 76,
-        59, 68, 77,
-        60, 61, 62,
-        69, 78,
-        70, 71,
-        79, 80
-    };
+
 
     uint8_t shuffleOptions[9] = {1,2,3,4,5,6,7,8,9};
 
@@ -356,10 +358,10 @@ std::ostream& operator<<(std::ostream& os, const stats& S) {
 }
 
 int main() {
-    // about 9 microseconds per board
+    // about 6.8 microseconds per board
     Sudoku S;
 
-    constexpr long int iterations = 100; // to estimate the time, take iterations * 9e-6 seconds
+    constexpr long int iterations = 100000; // to estimate the time, take iterations * 7e-6 seconds
     stats Z(10'000); // create a histogram with 10000 cuts in it.
 
     Timer T;
