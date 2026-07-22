@@ -94,10 +94,9 @@ public:
          *      go back to the previous cell, cleanup will be handled on the next iteration by that cell.
          *  **/
         while (true) {
-            if (cell == 80)/*[[unlikely]]*/ {
-                data[80] = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE;
-                if (data[80] != 0) {
-                    data[80] = std::countr_zero(_pdep_u64(1u << fastClamp(rng(), std::popcount(data[80])), data[80]));
+            if (cell == 80)[[unlikely]] {
+                if (const uint16_t lastMask = ~(rowMasks[7] | columnMasks[7] | boxMasks[8]) & 0x3FE; lastMask) {
+                    data[80] = std::countr_zero(lastMask);
                     break;
                 } else {
                     cell = 79, pos = 62;
@@ -115,7 +114,7 @@ public:
             }
             uint16_t mask = ~(rowMasks[cd9] | columnMasks[cm9] | boxMasks[box[cell]]) & 0x3FE;
             mask &= ~cellMasks[mapping[cell]];
-            if (mask != 0) {
+            if (mask) {
                 const uint8_t options = std::popcount(mask);
                 const uint8_t index = fastClamp(rng(), options);
 
@@ -123,9 +122,10 @@ public:
                 cellMasks[mapping[cell]] |= (1 << number); // add to our tried mask so we don't pick it again
                 data[cell] = number;
 
-                rowMasks[cd9] |= (1 << number);
-                columnMasks[cm9] |= (1 << number);
-                boxMasks[box[cell]] |= (1 << number);
+                const uint16_t addMask = 1 << number;
+                rowMasks[cd9] |= addMask;
+                columnMasks[cm9] |= addMask;
+                boxMasks[box[cell]] |= addMask;
 
                 data[path[pos + 1]] = 0;
                 cell = path[++pos];
@@ -208,7 +208,7 @@ private:
 
     fastRand rng; // a class instance that is compatible with shuffle, dist, etc.
 
-    uint16_t data[81] = {0}; // the visual data, the end product
+    uint8_t data[81] = {0}; // the visual data, the end product
 
     uint8_t cell; // the big loop
 
@@ -362,7 +362,7 @@ int main() {
     Sudoku S;
 
     constexpr long int iterations = 100000; // to estimate the time, take iterations * 7e-6 seconds
-    stats Z(10'000); // create a histogram with 10000 cuts in it.
+    // stats Z(10'000); // create a histogram with 10000 cuts in it.
 
     Timer T;
     T.start();
