@@ -208,7 +208,7 @@ private:
 
     fastRand rng; // a class instance that is compatible with shuffle, dist, etc.
 
-    uint8_t data[81] = {0}; // the visual data, the end product
+    uint16_t data[81] = {0}; // the visual data, the end product
 
     uint8_t cell; // the big loop
 
